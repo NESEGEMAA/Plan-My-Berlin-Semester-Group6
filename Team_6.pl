@@ -19,6 +19,11 @@ day_slots(Group, Week, Day, Slots):-
     findall(X, scheduled_slot(Week, Day, X, _, Group), CrudeResult),
     remove_duplicates(CrudeResult, Slots).
     
+earliest_slot(Group, Week, Day, Slot):-
+    day_slots(Group, Week, Day, SlotList),
+    sort(SlotList, [H|_]),
+    Slot is H.
+    
 
 % General Helper Methods
 remove_duplicates([], []).
