@@ -4,8 +4,6 @@
 :- ['transport_kb', 'slots_kb'].
 
 % Data Structures
-day_timing(Week, Day).
-
-journey(Week_Num, Week_Day, Start_Hour, Start_Minute, Total_Duration, Routes).
-
-route(Line, Start_Station, End_Station, Duration).
+% day_timing(Week, Day).
+% journey(Week_Num, Week_Day, Start_Hour, Start_Minute, Total_Duration, Routes).
+% route(Line, Start_Station, End_Station, Duration).
