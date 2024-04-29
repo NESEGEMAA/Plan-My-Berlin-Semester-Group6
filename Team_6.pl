@@ -23,6 +23,40 @@ earliest_slot(Group, Week, Day, Slot):-
     day_slots(Group, Week, Day, SlotList),
     sort(SlotList, [H|_]),
     Slot is H.
+
+% TRANSPORTATION
+proper_connection(Station_A, Station_B, Duration, Line):-
+    (connection(Station_A,_,_,Line); connection(_,Station_A,_,Line)),
+    (connection(Station_B,_,_,Line); connection(_,Station_B,_,Line)),
+    (get_duration(Station_A, Station_B, Line, 0, Duration); get_duration_backward(Station_A, Station_B, Line, 0, Duration)).
+
+% TRANSPORTATION's helper methods
+
+get_duration(Station_A, Station_C, Line, Acc, Duration):- !,
+    Station_A \== Station_C,
+    connection(Station_A, Station_C, X, Line),
+    Duration is Acc + X.
+
+get_duration(Station_A, Station_C, Line, Acc, Duration):-
+    Station_A \== Station_C,
+    connection(Station_A, Station_B, X, Line),
+    New_Acc is Acc + X,
+    New_Acc =< Duration,
+    get_duration(Station_B, Station_C, Line, New_Acc, Duration).
+
+get_duration_backward(Station_A, Station_C, Line, Acc, Duration):- !,
+    \+ unidirectional(Line),
+    Station_A \== Station_C,
+    connection(Station_C, Station_A, X, Line),
+    Duration is Acc + X.
+
+get_duration_backward(Station_A, Station_C, Line, Acc, Duration):-
+    \+ unidirectional(Line),
+    Station_A \== Station_C,
+    connection(Station_B, Station_A, X, Line),
+    New_Acc is Acc + X,
+    New_Acc =< Duration,
+    get_duration(Station_B, Station_C, Line, New_Acc, Duration).
     
 
 % General Helper Methods
