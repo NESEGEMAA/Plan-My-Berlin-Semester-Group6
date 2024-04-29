@@ -30,6 +30,11 @@ proper_connection(Station_A, Station_B, Duration, Line):-
     (connection(Station_B,_,_,Line); connection(_,Station_B,_,Line)),
     (get_duration(Station_A, Station_B, Line, 0, Duration); get_duration_backward(Station_A, Station_B, Line, 0, Duration)).
 
+append_connection(Conn_Source, Conn_Destination, Conn_Duration, Conn_Line, Routes_So_Far, Routes):-
+    proper_connection(Conn_Source, Conn_Destination, Conn_Duration, Conn_Line),
+    check_available(Conn_Source, Conn_Destination, Conn_Duration, Conn_Line, Routes_So_Far, ProperRoute),
+    append(Routes_So_Far, ProperRoute, Routes).
+
 % TRANSPORTATION's helper methods
 
 get_duration(Station_A, Station_C, Line, Acc, Duration):- !,
@@ -57,6 +62,29 @@ get_duration_backward(Station_A, Station_C, Line, Acc, Duration):-
     New_Acc is Acc + X,
     New_Acc =< Duration,
     get_duration(Station_B, Station_C, Line, New_Acc, Duration).
+
+check_available(Station_A, Station_B, Duration_4, Line, [], route(Line, Station_A, Station_B, Duration_4)).
+check_available(Station_A, Station_B, Duration_4, Line, [H|T], ProperRoute):- !,
+    H \== route(Line, _, _, _),
+    check_available(Station_A, Station_B, Duration_4, Line, T, ProperRoute).
+
+check_available(Station_A, Station_B, Duration_4, Line, [H|_], ProperRoute):-
+    H = route(Line, Station_X, Station_Y, Duration_3),
+    proper_connection(Station_A, Station_Y, Duration_1, Line),
+    proper_connection(Station_X, Station_B, Duration_2, Line),
+    ((
+        Duration_3 > Duration_1,
+        Duration_3 > Duration_2,
+        ProperRoute is route(Line, Station_X, Station_Y, Duration_3)
+    );
+    (
+        Duration_1 > Duration_3,
+        Duration_1 > Duration_4,
+        ProperRoute is route(Line, Station_A, Station_Y, Duration_1) 
+    );
+    (
+        ProperRoute is route(Line, Station_A, Station_B, Duration_4)
+    )).
     
 
 % General Helper Methods
