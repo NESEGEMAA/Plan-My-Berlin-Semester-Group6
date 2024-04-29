@@ -15,6 +15,11 @@ group_days(Group, Day_Timings):-
     findall(X, scheduled_slot(Week, Day, _, _, Group), CrudeResult),
     remove_duplicates(CrudeResult, Day_Timings).
 
+day_slots(Group, Week, Day, Slots):-
+    findall(X, scheduled_slot(Week, Day, X, _, Group), CrudeResult),
+    remove_duplicates(CrudeResult, Slots).
+    
+
 % General Helper Methods
 remove_duplicates([], []).
 
