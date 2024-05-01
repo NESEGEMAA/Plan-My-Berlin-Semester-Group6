@@ -38,22 +38,44 @@ earliest_slot(Group, Week, Day, Slot):-
 %implementing Transportation -> proper_connection/4
 
 proper_connection(Station_A, Station_B, Duration, Line):-
-    proper_connection_helper(Station_A, Station_B, Duration, Line),
+    connection(Station_A,_,_,Line),
+    (var(Station_B)
+    -> proper_connection_forwards(Station_A, Station_B, Duration, Line, [Station_A], 0)
+    ; 
+    proper_connection_forwards(Station_A, Station_B, Duration, Line, [Station_A], 0),
+    !
+    ),
     Duration \== 0.
 
 proper_connection(Station_A, Station_B, Duration, Line):-
     \+unidirectional(Line),
-    proper_connection_helper(Station_B, Station_A, Duration, Line),
+    connection(Station_A,_,_,Line),
+    (var(Station_B)
+    -> proper_connection_backwards(Station_A, Station_B, Duration, Line, [Station_A], 0)
+    ; 
+    proper_connection_backwards(Station_A, Station_B, Duration, Line, [Station_A], 0),
+    !
+    ),
     Duration \== 0.
 
-proper_connection_helper(Station_A, Station_B, Duration, Line):-
+proper_connection_forwards(Station_A, Station_A, DurationAcc,_, _, DurationAcc).
+proper_connection_forwards(Station_A, Station_B, Duration, Line, PreviouslyVisited, DurationAcc):-
     connection(Station_A, X, Duration1, Line),
-    ((X == Station_B) -> (Duration is Duration1)
+    (member(X, PreviouslyVisited) -> Duration is 0
     ;
-    (proper_connection_helper(X, Station_B, Duration2, Line),
-    Duration is Duration1 + Duration2)).
-    
+    (append([X], PreviouslyVisited, PreviouslyVisited1),
+    DurationAcc1 is DurationAcc + Duration1,
+    proper_connection_forwards(X, Station_B, Duration, Line, PreviouslyVisited1, DurationAcc1))).
 
+proper_connection_backwards(Station_A, Station_A, DurationAcc,_, _, DurationAcc).
+proper_connection_backwards(Station_A, Station_B, Duration, Line, PreviouslyVisited, DurationAcc):-
+    connection(X, Station_A, Duration1, Line),
+    (member(X, PreviouslyVisited) ->  Duration is 0
+    ;
+    (append([X], PreviouslyVisited, PreviouslyVisited1),
+    DurationAcc1 is DurationAcc + Duration1,
+    proper_connection_backwards(X, Station_B, Duration, Line, PreviouslyVisited1, DurationAcc1))).
+    
 %implementing Transportation -> append_connection/6
 
 append_connection(Conn_Source,Conn_Destination,Conn_Duration,Conn_Line,[],[route(Conn_Line, Conn_Source, Conn_Destination, Conn_Duration)]):- !.
@@ -83,18 +105,19 @@ delete_last([H|T], [H|List]):-
 %implementing Transportation -> connected/8
 
 connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes):-
-    connected_helper(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, 0, []),
-    !.
+    connected_helper(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, 0, [], [Source]).
 
-connected_helper(Source,Source,_,_,_,_,DurationAcc,RoutesAcc,DurationAcc,RoutesAcc):- !.
+connected_helper(Source,Source,_,_,_,_,DurationAcc,RoutesAcc,DurationAcc,RoutesAcc,_):- !.
 
-connected_helper(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc, RoutesAcc):-   
+connected_helper(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc, RoutesAcc, PreviouslyVisited):-   
     line(Transport,Line),
-    \+strike(Line, Week, Day),
+    not(strike(Line, Week, Day)),
     proper_connection(Source, X, Duration1, Transport),
-    append_connection(Source, X, Duration1, Transport, RoutesAcc, RoutesAcc1),
+    not(member(X, PreviouslyVisited)),
+    append([X], PreviouslyVisited, PreviouslyVisited1),
     DurationAcc1 is DurationAcc + Duration1,
-    length(RoutesAcc1, RouteCount),
     DurationAcc1 =< Max_Duration,
+    append_connection(Source, X, Duration1, Transport, RoutesAcc, RoutesAcc1),
+    length(RoutesAcc1, RouteCount),
     RouteCount =< Max_Routes,
-    connected_helper(X, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc1, RoutesAcc1).
+    connected_helper(X, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc1, RoutesAcc1, PreviouslyVisited1).
