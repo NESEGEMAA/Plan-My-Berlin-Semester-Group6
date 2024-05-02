@@ -120,13 +120,13 @@ connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Ro
 connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Prev_Stations, Routes_So_Far, Routes):-
     connected_testing(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, 0, Routes_So_Far, [], Prev_Stations).
 
-connected_testing(Source, Source, _, _, Max_Duration, Max_Routes, DurationAcc, RoutesAcc, DurationAcc, RoutesAcc, _, _):-
+connected(Source, Source, _, _, Max_Duration, Max_Routes, DurationAcc, RoutesAcc, DurationAcc, RoutesAcc, _, _):-
+    DurationAcc \== 0,
     DurationAcc =< Max_Duration,
     length(RoutesAcc, L),
-    L =< Max_Routes,
-    !.
+    L =< Max_Routes.
 
-connected_testing(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc, RoutesAcc, LineAcc, Prev_Stations):-
+connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc, RoutesAcc, LineAcc, Prev_Stations):-
     DurationAcc < Max_Duration,
     length(RoutesAcc, L),
     L < Max_Routes,
@@ -140,9 +140,13 @@ connected_testing(Source, Destination, Week, Day, Max_Duration, Max_Routes, Dura
     %remove stations that were previously visited
     unique_elements_1(FinalStations1, Prev_Stations, FinalStations2),
     %remove stations that might cause loops because of the ring roads
-    remove_ring(FinalStations2, LineAcc, CorrectedFinalStations),
+    remove_ring(FinalStations2, LineAcc, CorrectedFinalStationsNotRandom),
+    %trace,
     %explore every member of the list
+    %get a random permutation
+    random_permutation(CorrectedFinalStationsNotRandom, CorrectedFinalStations),
     member(station_data(X, Duration1, Line), CorrectedFinalStations),
+    Max_Duration >= Duration1 + DurationAcc,
     %continue with said member after getting its duration and line
     line(Line, Mode),
     not(strike(Mode, Week, Day)),
@@ -151,7 +155,7 @@ connected_testing(Source, Destination, Week, Day, Max_Duration, Max_Routes, Dura
     DurationAcc1 is DurationAcc + Duration1,
     append_connection(Source, X, Duration1, Line, RoutesAcc, RoutesAcc1),
     %trace,
-    connected_testing(X, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc1, RoutesAcc1, NewLineAcc, New_Prev_Stations)
+    connected(X, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc1, RoutesAcc1, NewLineAcc, New_Prev_Stations)
     .
 
 unique_elements_1([], _, []).
@@ -245,35 +249,63 @@ slot_to_mins(Slot_Num, Minutes):-
 %a journey consists of Week_Num, Week_Day, Start_Hour, Start_Minute, Total_Duration, Routes
 
 
-%in order to get Week_Num, Week_Day, and Max_Duration depending on the Group
-%group struct is (Week_Num, Week_Day, Max_Duration)
-/* info_getter(Week_Num, Week_Day, Slot, Group, Max_Duration):-
+%in order to get Week_Num, Week_Day, and Slot_Time depending on the Group
+%group struct is (Week_Num, Week_Day, Slot_Time)
+info_getter(Week_Num, Week_Day, Slot, Group, Slot_Time):-
     scheduled_slot(Week_Num, Week_Day, _, _, Group),
     earliest_slot(Group, Week_Num, Week_Day, Slot),
-    slot_to_mins(Slot, Max_Duration).
+    slot_to_mins(Slot, Slot_Time).
 
 info_getter_list(Group, List):-
-    findall(group(Week_Num, Week_Day, Max_Duration),
-    info_getter(Week_Num, Week_Day, Slot, Group, Max_Duration),
+    findall(group(Week_Num, Week_Day, Slot_Time),
+    info_getter(Week_Num, Week_Day, _, Group, Slot_Time),
     List1),
     remove_repetitions(List1, List).
 
 travel_plan(Starting_List, Group, Max_Duration, Max_Routes, Journeys):-
-    info_getter_list(Group, List),
-    travel_plan_helper(Starting_Stations_List, Group, Max_Duration, Max_Routes, Journeys, List).
+    info_getter_list(Group, Day_List),
+    travel_plan_helper(Starting_List, Max_Duration, Max_Routes, Day_List, Journeys).
 
-travel_plan_helper([], _, _, _, _, _).
+travel_plan_helper(_,_,_,[],[]).
 
-travel_plan_helper(Starting_Stations_List, Group, Max_Duration, Max_Routes, Journeys, [group(Week_Num, Week_Day, Max_Duration) | T], Answer):-
-    
-    travel_plan_helper_helper(Starting_Stations_List, Group, Max_Duration, Max_Routes, Week_Day, group(Week_Num, Week_Day, Max_Duration), Answer).
+travel_plan_helper(Starting_List, Max_Duration, Max_Routes, [H|T], Journeys):-
+    travel_plan_helper2(Starting_List, Max_Duration, Max_Routes, H, JourneyList),
+    length(JourneyList, L),
+    L > 0,
+    travel_plan_helper(Starting_List, Max_Duration, Max_Routes, T, Journeys2),
+    append(JourneyList, Journeys2, Journeys).
 
-travel_plan_helper_helper([],_,_,_,_,_,[]).
+travel_plan_helper2([], _, _, _, []).
 
-travel_plan_helper_helper([H|T], Group, Max_Duration, Max_Routes, Day, group(Week_Num, Week_Day, Max_Duration), Answer):-
-    mins_to_twentyfour_hr(Max_Duration, TwentyFour_Hours, TwentyFour_Mins),
+/* travel_plan_helper2([H|[]], Max_Duration, Max_Routes, GroupData, Journey):-
+    not(is_list(H)),
+    GroupData = group(Week_Num, Week_Day, Slot_Time),
+    notrace,
     connected(H, tegel, Week_Num, Week_Day, Max_Duration, Max_Routes, Duration, Routes),
-    append(Answer, [journey(Week_Num, Week_Day, TwentyFour_Hours, TwentyFour_Mins, Duration, Routes)], New_Answer),
-    travel_plan_helper_helper(T, Group, Max_Duration, Max_Routes, Day, group(Week_Num, Week_Day, Max_Duration), New_Answer). */
+    !,
+    trace,
+    %journey struct consists of Week_Num, Week_Day, Start_Hour, Start_Minute, Total_Duration, Routes
+    %Start hour and start minute calculation
+    StartingTime is Slot_Time - Duration,
+    mins_to_twentyfour_hr(StartingTime, Start_Hour, Start_Minute),
+    CurrentJourney = journey(Week_Num, Week_Day, Start_Hour, Start_Minute, Duration, Routes),
+    !,
+    travel_plan_helper2([], Max_Duration, Max_Routes, GroupData, Journey1),
+    append(Journey1, [CurrentJourney], Journey). */
 
-    
+travel_plan_helper2([H|T], Max_Duration, Max_Routes, GroupData, Journey):-
+    GroupData = group(Week_Num, Week_Day, Slot_Time),
+    (connected(H, tegel, Week_Num, Week_Day, Max_Duration, Max_Routes, Duration, Routes) -> 
+    StartingTime is Slot_Time - Duration,
+    mins_to_twentyfour_hr(StartingTime, Start_Hour, Start_Minute),
+    Journey1 = journey(Week_Num, Week_Day, Start_Hour, Start_Minute, Duration, Routes),
+    Journey = [Journey1]
+    ;
+    (connected(H, borsigwerke, Week_Num, Week_Day, Max_Duration, Max_Routes, Duration, Routes) -> 
+    StartingTime is Slot_Time - Duration,
+    mins_to_twentyfour_hr(StartingTime, Start_Hour, Start_Minute),
+    Journey1 = journey(Week_Num, Week_Day, Start_Hour, Start_Minute, Duration, Routes),
+    Journey = [Journey1])
+    ;
+    travel_plan_helper2(T, Max_Duration, Max_Routes, GroupData, Journey)
+    ).
