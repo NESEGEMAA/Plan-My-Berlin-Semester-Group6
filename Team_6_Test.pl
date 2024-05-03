@@ -17,6 +17,7 @@ remove_repetitions([H|T], T1):-
     member(H,T),
     !,
     remove_repetitions(T,T1).
+    
 remove_repetitions([H|T], [H|T1]):-
     remove_repetitions(T,T1).
 
@@ -36,6 +37,7 @@ earliest_slot(Group, Week, Day, Slot):-
     Slot is H.
 
 %implementing Transportation -> proper_connection/4
+
 proper_connection(Station_A, Station_B, Duration, Line):-
     (var(Line) -> line(Line,_),
     proper_connection_helper(Station_A,Station_B,Duration,Line)
@@ -114,11 +116,12 @@ delete_last([H|T], [H|List]):-
     delete_last(T, List).
 
 %implementing Transportation -> connected/8 and Transportation -> connected/10
+
 connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes):-
     connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, [Source], [], Routes).
 
 connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Prev_Stations, Routes_So_Far, Routes):-
-    connected_testing(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, 0, Routes_So_Far, [], Prev_Stations).
+    connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, 0, Routes_So_Far, [], Prev_Stations).
 
 connected(Source, Source, _, _, Max_Duration, Max_Routes, DurationAcc, RoutesAcc, DurationAcc, RoutesAcc, _, _):-
     DurationAcc \== 0,
@@ -130,63 +133,27 @@ connected(Source, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Ro
     DurationAcc < Max_Duration,
     length(RoutesAcc, L),
     L < Max_Routes,
-    %get all possible stations
-    %notrace,
-    testing(Source, Stations),
-    %remove stations that are useless
+    get_all_stations(Source, Stations),
     filter_by_duration(Source, Stations, Max_Duration, FinalStations),
-    %remove stations that are on lines we previously visited
-    unique_elements(FinalStations, LineAcc, FinalStations1),
-    %remove stations that were previously visited
-    unique_elements_1(FinalStations1, Prev_Stations, FinalStations2),
-    %remove stations that might cause loops because of the ring roads
+    filter_by_visited_lines(FinalStations, LineAcc, FinalStations1),
+    filter_by_visited_stations(FinalStations1, Prev_Stations, FinalStations2),
     remove_ring(FinalStations2, LineAcc, CorrectedFinalStationsNotRandom),
-    %trace,
-    %explore every member of the list
-    %get a random permutation
     random_permutation(CorrectedFinalStationsNotRandom, CorrectedFinalStations),
     member(station_data(X, Duration1, Line), CorrectedFinalStations),
     Max_Duration >= Duration1 + DurationAcc,
-    %continue with said member after getting its duration and line
     line(Line, Mode),
     not(strike(Mode, Week, Day)),
     append(Prev_Stations, [Destination], New_Prev_Stations),
     append(LineAcc, [Line], NewLineAcc),
     DurationAcc1 is DurationAcc + Duration1,
     append_connection(Source, X, Duration1, Line, RoutesAcc, RoutesAcc1),
-    %trace,
-    connected(X, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc1, RoutesAcc1, NewLineAcc, New_Prev_Stations)
-    .
+    connected(X, Destination, Week, Day, Max_Duration, Max_Routes, Duration, Routes, DurationAcc1, RoutesAcc1, NewLineAcc, New_Prev_Stations).
 
-unique_elements_1([], _, []).
-
-unique_elements_1([H|T], Prev_Stations, New_Prev_Stations):-
-    member(H, Prev_Stations),
-    !,
-    unique_elements_1(T, Prev_Stations, New_Prev_Stations).
-
-unique_elements_1([H|T], Prev_Stations, [H|New_Prev_Stations]):-
-    not(member(H, Prev_Stations)),
-    unique_elements_1(T, Prev_Stations, New_Prev_Stations).
-
-testing(Source, TestAns):-
+get_all_stations(Source, TestAns):-
     findall(station_data(X,Y,Z),
             proper_connection(Source, X, Y, Z),
             TestAns1),
     remove_repetitions(TestAns1, TestAns).
-
-unique_elements([], _, []).
-
-unique_elements([H|FirstList], SecondList, Unique) :-
-    H = station_data(_,_,X),
-    member(X, SecondList),
-    !,
-    unique_elements(FirstList, SecondList, Unique).
-
-unique_elements([H|FirstList], SecondList, [H|Unique]) :-
-    H = station_data(_,_,X),
-    \+ member(X, SecondList),
-    unique_elements(FirstList, SecondList, Unique).
 
 filter_by_duration(_, [], _, []).
 
@@ -200,7 +167,32 @@ filter_by_duration(Source, [H|T], Max_Duration, FinalStations):-
     Duration > Max_Duration,
     filter_by_duration(Source, T, Max_Duration, FinalStations).
 
+filter_by_visited_lines([], _, []).
+
+filter_by_visited_lines([H|FirstList], SecondList, Unique) :-
+    H = station_data(_,_,X),
+    member(X, SecondList),
+    !,
+    filter_by_visited_lines(FirstList, SecondList, Unique).
+
+filter_visited_lines([H|FirstList], SecondList, [H|Unique]) :-
+    H = station_data(_,_,X),
+    \+ member(X, SecondList),
+    filter_by_visited_lines(FirstList, SecondList, Unique).
+
+filter_by_visited_stations([], _, []).
+
+filter_by_visited_stations([H|T], Prev_Stations, New_Prev_Stations):-
+    member(H, Prev_Stations),
+    !,
+    filter_by_visited_stations(T, Prev_Stations, New_Prev_Stations).
+
+filter_by_visited_stations([H|T], Prev_Stations, [H|New_Prev_Stations]):-
+    not(member(H, Prev_Stations)),
+    filter_by_visited_stations(T, Prev_Stations, New_Prev_Stations).
+
 remove_ring([], _, []).
+
 remove_ring([H|T], Lines, FinalStations):-
     H = station_data(_, _, Line),
     remove_ring(T, Lines, FinalStations1),
@@ -245,12 +237,12 @@ slot_to_mins(Slot_Num, Minutes):-
 
 %notes:
 %Home_Stations is a list of all possible sources
-%The destination is always tegel
-%a journey consists of Week_Num, Week_Day, Start_Hour, Start_Minute, Total_Duration, Routes
+%The destination is always tegel if it is reachable, otherwise borsigwerke
+%A journey consists of Week_Num, Week_Day, Start_Hour, Start_Minute, Total_Duration, Routes
 
 
-%in order to get Week_Num, Week_Day, and Slot_Time depending on the Group
 %group struct is (Week_Num, Week_Day, Slot_Time)
+
 info_getter(Week_Num, Week_Day, Slot, Group, Slot_Time):-
     scheduled_slot(Week_Num, Week_Day, _, _, Group),
     earliest_slot(Group, Week_Num, Week_Day, Slot),
@@ -277,23 +269,9 @@ travel_plan_helper(Starting_List, Max_Duration, Max_Routes, [H|T], Journeys):-
 
 travel_plan_helper2([], _, _, _, []).
 
-/* travel_plan_helper2([H|[]], Max_Duration, Max_Routes, GroupData, Journey):-
-    not(is_list(H)),
-    GroupData = group(Week_Num, Week_Day, Slot_Time),
-    notrace,
-    connected(H, tegel, Week_Num, Week_Day, Max_Duration, Max_Routes, Duration, Routes),
-    !,
-    trace,
-    %journey struct consists of Week_Num, Week_Day, Start_Hour, Start_Minute, Total_Duration, Routes
-    %Start hour and start minute calculation
-    StartingTime is Slot_Time - Duration,
-    mins_to_twentyfour_hr(StartingTime, Start_Hour, Start_Minute),
-    CurrentJourney = journey(Week_Num, Week_Day, Start_Hour, Start_Minute, Duration, Routes),
-    !,
-    travel_plan_helper2([], Max_Duration, Max_Routes, GroupData, Journey1),
-    append(Journey1, [CurrentJourney], Journey). */
-
-travel_plan_helper2([H|T], Max_Duration, Max_Routes, GroupData, Journey):-
+travel_plan_helper2(Starting_List, Max_Duration, Max_Routes, GroupData, Journey):-
+    random_permutation(Starting_List, Starting_List_Randomized),
+    Starting_List_Randomized = [H|T],
     GroupData = group(Week_Num, Week_Day, Slot_Time),
     (connected(H, tegel, Week_Num, Week_Day, Max_Duration, Max_Routes, Duration, Routes) -> 
     StartingTime is Slot_Time - Duration,
